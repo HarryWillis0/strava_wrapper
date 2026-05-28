@@ -10,6 +10,8 @@ import Config
 config :strava_wrapper,
   generators: [timestamp_type: :utc_datetime]
 
+config :strava_wrapper, :strava, base_url: "https://www.strava.com/api/v3"
+
 # Configure the endpoint
 config :strava_wrapper, StravaWrapperWeb.Endpoint,
   url: [host: "localhost"],
