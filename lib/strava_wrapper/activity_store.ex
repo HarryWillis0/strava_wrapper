@@ -9,8 +9,14 @@ defmodule StravaWrapper.ActivityStore do
 
   @spec all(String.t()) :: list()
   def all(user_id) do
-    :ets.match_object(:activities, {{user_id, :_}, :_})
-    |> Enum.map(fn {_key, activity} -> activity end)
+    case :ets.whereis(:activities) do
+      :undefined ->
+        []
+
+      _ ->
+        :ets.match_object(:activities, {{user_id, :_}, :_})
+        |> Enum.map(fn {_key, activity} -> activity end)
+    end
   end
 
   @spec filter(String.t(), map()) :: list()
