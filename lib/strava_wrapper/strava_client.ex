@@ -1,7 +1,7 @@
 defmodule StravaWrapper.StravaClient do
   alias StravaWrapper.Activity
 
-  @base_url "https://www.strava.com/api/v3"
+  @base_url Application.compile_env!(:strava_wrapper, [:strava, :base_url])
   @per_page 200
 
   @spec fetch_activities(String.t()) :: [%Activity{}]

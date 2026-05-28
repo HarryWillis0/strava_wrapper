@@ -1,7 +1,8 @@
 import Config
 
-config :strava_wrapper, :strava,
-  access_token: System.fetch_env!("STRAVA_ACCESS_TOKEN")
+if config_env() != :test do
+  config :strava_wrapper, :strava, access_token: System.fetch_env!("STRAVA_ACCESS_TOKEN")
+end
 
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
