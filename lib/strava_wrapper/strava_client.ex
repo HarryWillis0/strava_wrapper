@@ -6,25 +6,24 @@ defmodule StravaWrapper.StravaClient do
 
   @spec fetch_activities(String.t()) :: [%Activity{}]
   def fetch_activities(access_token) do
-    fetch_page(access_token, 1, [])
+    req = build_req(access_token)
+    fetch_page(req, 1, [])
   end
 
-  defp fetch_page(access_token, page, accumulated) do
+  defp build_req(token) do
+    opts = Application.get_env(:strava_wrapper, :strava_client_req_options, [])
+    Req.new([base_url: @base_url, auth: {:bearer, token}] ++ opts)
+  end
+
+  defp fetch_page(req, page, accumulated) do
     response =
-      Req.get!(
-        "#{@base_url}/athlete/activities",
-        auth: {:bearer, access_token},
-        params: [per_page: @per_page, page: page]
-      )
+      Req.get!(req, url: "/athlete/activities", params: [per_page: @per_page, page: page])
 
     activities = Enum.map(response.body, &parse_activity/1)
 
     case length(activities) do
-      @per_page ->
-        fetch_page(access_token, page + 1, accumulated ++ activities)
-
-      _ ->
-        accumulated ++ activities
+      @per_page -> fetch_page(req, page + 1, accumulated ++ activities)
+      _ -> accumulated ++ activities
     end
   end
 
