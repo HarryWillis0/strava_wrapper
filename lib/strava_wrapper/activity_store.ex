@@ -1,7 +1,7 @@
 defmodule StravaWrapper.ActivityStore do
   use GenServer
 
-  alias StravaWrapper.{GearResolver, StravaClient}
+  alias StravaWrapper.{FilterEngine, GearResolver, StravaClient}
 
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
@@ -14,8 +14,10 @@ defmodule StravaWrapper.ActivityStore do
   end
 
   @spec filter(String.t(), map()) :: list()
-  def filter(user_id, _filter_map) do
-    all(user_id)
+  def filter(user_id, filter_map) do
+    user_id
+    |> all()
+    |> FilterEngine.apply(filter_map)
   end
 
   @impl true
