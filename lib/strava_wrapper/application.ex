@@ -7,15 +7,15 @@ defmodule StravaWrapper.Application do
 
   @impl true
   def start(_type, _args) do
-    children = [
+    base_children = [
       StravaWrapperWeb.Telemetry,
       {DNSCluster, query: Application.get_env(:strava_wrapper, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: StravaWrapper.PubSub},
-      # Start a worker by calling: StravaWrapper.Worker.start_link(arg)
-      # {StravaWrapper.Worker, arg},
-      # Start to serve requests, typically the last entry
       StravaWrapperWeb.Endpoint
     ]
+
+    store_child = if Mix.env() != :test, do: [StravaWrapper.ActivityStore], else: []
+    children = store_child ++ base_children
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
