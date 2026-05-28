@@ -17,7 +17,7 @@ defmodule StravaWrapperWeb.Router do
   scope "/", StravaWrapperWeb do
     pipe_through :browser
 
-    get "/", PageController, :home
+    live "/", ActivityLive
   end
 
   # Other scopes may use custom stacks.
