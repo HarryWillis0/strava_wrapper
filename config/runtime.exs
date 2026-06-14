@@ -1,7 +1,9 @@
 import Config
 
 if config_env() != :test do
-  config :strava_wrapper, :strava, access_token: System.fetch_env!("STRAVA_ACCESS_TOKEN")
+  config :strava_wrapper, :strava,
+    client_id: System.fetch_env!("STRAVA_CLIENT_ID"),
+    client_secret: System.fetch_env!("STRAVA_CLIENT_SECRET")
 end
 
 # config/runtime.exs is executed for all environments, including

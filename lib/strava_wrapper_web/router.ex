@@ -18,6 +18,8 @@ defmodule StravaWrapperWeb.Router do
     pipe_through :browser
 
     live "/", ActivityLive
+    get "/auth/strava", AuthController, :request
+    get "/auth/strava/callback", AuthController, :callback
   end
 
   # Other scopes may use custom stacks.

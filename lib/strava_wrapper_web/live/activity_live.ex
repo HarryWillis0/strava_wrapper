@@ -4,38 +4,44 @@ defmodule StravaWrapperWeb.ActivityLive do
   alias StravaWrapper.ActivityStore
 
   @impl true
-  def mount(_params, _session, socket) do
-    activities = ActivityStore.all("default")
+  def mount(_params, session, socket) do
+    case session do
+      %{"athlete_id" => athlete_id} ->
+        activities = ActivityStore.all(athlete_id)
 
-    gear_options =
-      activities
-      |> Enum.map(fn a -> {a.gear_id, a.gear_name} end)
-      |> Enum.reject(fn {id, _} -> is_nil(id) end)
-      |> Enum.uniq_by(fn {id, _} -> id end)
+        gear_options =
+          activities
+          |> Enum.map(fn a -> {a.gear_id, a.gear_name} end)
+          |> Enum.reject(fn {id, _} -> is_nil(id) end)
+          |> Enum.uniq_by(fn {id, _} -> id end)
 
-    socket =
-      socket
-      |> assign(gear_options: gear_options, active_filter: "all")
-      |> stream(:activities, activities)
+        socket =
+          socket
+          |> assign(athlete_id: athlete_id, gear_options: gear_options, active_filter: "all")
+          |> stream(:activities, activities)
 
-    {:ok, socket}
+        {:ok, socket}
+
+      _ ->
+        {:ok, push_navigate(socket, to: ~p"/auth/strava")}
+    end
   end
 
   @impl true
   def handle_event("filter_gear", %{"gear_id" => "all"}, socket) do
-    activities = ActivityStore.all("default")
+    activities = ActivityStore.all(socket.assigns.athlete_id)
     socket = stream(socket, :activities, activities, reset: true)
     {:noreply, assign(socket, active_filter: "all")}
   end
 
   def handle_event("filter_gear", %{"gear_id" => "none"}, socket) do
-    activities = ActivityStore.filter("default", %{gear_id: nil})
+    activities = ActivityStore.filter(socket.assigns.athlete_id, %{gear_id: nil})
     socket = stream(socket, :activities, activities, reset: true)
     {:noreply, assign(socket, active_filter: "none")}
   end
 
   def handle_event("filter_gear", %{"gear_id" => gear_id}, socket) do
-    activities = ActivityStore.filter("default", %{gear_id: gear_id})
+    activities = ActivityStore.filter(socket.assigns.athlete_id, %{gear_id: gear_id})
     socket = stream(socket, :activities, activities, reset: true)
     {:noreply, assign(socket, active_filter: gear_id)}
   end

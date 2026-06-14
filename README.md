@@ -1,18 +1,13 @@
-# StravaWrapper
+# strava_wrapper
 
-To start your Phoenix server:
+A Phoenix LiveView app that fetches your Strava activity history and lets you filter by gear — no API calls on filter changes.
 
-* Run `mix setup` to install and setup dependencies
-* Start Phoenix endpoint with `mix phx.server` or inside IEx with `iex -S mix phx.server`
+## Setup
 
-Now you can visit [`localhost:4000`](http://localhost:4000) from your browser.
+```bash
+cp .env.example .env   # set STRAVA_ACCESS_TOKEN
+mix setup
+source .env && mix phx.server
+```
 
-Ready to run in production? Please [check our deployment guides](https://hexdocs.pm/phoenix/deployment.html).
-
-## Learn more
-
-* Official website: https://www.phoenixframework.org/
-* Guides: https://hexdocs.pm/phoenix/overview.html
-* Docs: https://hexdocs.pm/phoenix
-* Forum: https://elixirforum.com/c/phoenix-forum
-* Source: https://github.com/phoenixframework/phoenix
+Visit [localhost:4000](http://localhost:4000).

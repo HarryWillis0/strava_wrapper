@@ -14,18 +14,26 @@ defmodule StravaWrapper.ActivityStoreTest do
     gear_name: nil
   }
 
-  setup do
-    start_supervised!({ActivityStore, activities: [@activity]})
-    :ok
+  test "starts with no activities" do
+    start_supervised!(ActivityStore)
+    assert ActivityStore.all("any_athlete") == []
   end
 
-  test "all/1 returns a list of activities for the default user" do
-    result = ActivityStore.all("default")
-    assert is_list(result)
-    assert length(result) == 1
-  end
+  describe "with seeded activities" do
+    setup do
+      start_supervised!(ActivityStore)
+      ActivityStore.put("default", [@activity])
+      :ok
+    end
 
-  test "all/1 returns empty list for an unknown user" do
-    assert ActivityStore.all("unknown_user") == []
+    test "all/1 returns a list of activities for the user" do
+      result = ActivityStore.all("default")
+      assert is_list(result)
+      assert length(result) == 1
+    end
+
+    test "all/1 returns empty list for an unknown user" do
+      assert ActivityStore.all("unknown_user") == []
+    end
   end
 end

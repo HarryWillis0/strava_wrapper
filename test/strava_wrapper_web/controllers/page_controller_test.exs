@@ -1,8 +1,8 @@
 defmodule StravaWrapperWeb.PageControllerTest do
   use StravaWrapperWeb.ConnCase
 
-  test "GET / renders activity list page", %{conn: conn} do
+  test "GET / redirects to auth when no session", %{conn: conn} do
     conn = get(conn, ~p"/")
-    assert html_response(conn, 200) =~ "Activities"
+    assert redirected_to(conn) == ~p"/auth/strava"
   end
 end

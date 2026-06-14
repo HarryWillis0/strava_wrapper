@@ -7,6 +7,21 @@ defmodule StravaWrapper.ActivityStore do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
 
+  @spec put(String.t(), list()) :: :ok
+  def put(user_id, activities) do
+    store_for_user(user_id, activities)
+  end
+
+  @spec load_for_user(String.t(), String.t()) :: :ok
+  def load_for_user(athlete_id, token) do
+    activities =
+      token
+      |> StravaClient.fetch_activities()
+      |> then(&GearResolver.resolve(token, &1))
+
+    store_for_user(athlete_id, activities)
+  end
+
   @spec all(String.t()) :: list()
   def all(user_id) do
     case :ets.whereis(:activities) do
@@ -27,30 +42,9 @@ defmodule StravaWrapper.ActivityStore do
   end
 
   @impl true
-  def init(opts) do
+  def init(_opts) do
     :ets.new(:activities, [:set, :public, :named_table])
-    activities = load(opts)
-    store_for_user("default", activities)
     {:ok, %{}}
-  end
-
-  defp load(opts) do
-    case Keyword.get(opts, :activities) do
-      nil ->
-        token = get_token()
-
-        token
-        |> StravaClient.fetch_activities()
-        |> then(&GearResolver.resolve(token, &1))
-
-      preloaded ->
-        preloaded
-    end
-  end
-
-  defp get_token do
-    Application.get_env(:strava_wrapper, :strava, [])
-    |> Keyword.get(:access_token, "")
   end
 
   defp store_for_user(user_id, activities) do

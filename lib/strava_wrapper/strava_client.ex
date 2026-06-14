@@ -2,7 +2,34 @@ defmodule StravaWrapper.StravaClient do
   alias StravaWrapper.Activity
 
   @base_url Application.compile_env!(:strava_wrapper, [:strava, :base_url])
+  @oauth_url "https://www.strava.com/oauth/token"
   @per_page 200
+
+  @spec exchange_code(String.t()) ::
+          {:ok, %{access_token: String.t(), athlete_id: integer()}} | {:error, String.t()}
+  def exchange_code(code) do
+    config = Application.get_env(:strava_wrapper, :strava, [])
+
+    form = [
+      client_id: Keyword.get(config, :client_id),
+      client_secret: Keyword.get(config, :client_secret),
+      code: code,
+      grant_type: "authorization_code"
+    ]
+
+    opts = Application.get_env(:strava_wrapper, :strava_client_req_options, [])
+
+    case Req.post(Req.new(opts), url: @oauth_url, form: form) do
+      {:ok, %{status: 200, body: body}} ->
+        {:ok, %{access_token: body["access_token"], athlete_id: body["athlete"]["id"]}}
+
+      {:ok, %{body: body}} ->
+        {:error, body["message"] || "token exchange failed"}
+
+      {:error, reason} ->
+        {:error, inspect(reason)}
+    end
+  end
 
   @spec fetch_activities(String.t()) :: [%Activity{}]
   def fetch_activities(access_token) do
@@ -19,11 +46,20 @@ defmodule StravaWrapper.StravaClient do
     response =
       Req.get!(req, url: "/athlete/activities", params: [per_page: @per_page, page: page])
 
-    activities = Enum.map(response.body, &parse_activity/1)
+    case response.body do
+      body when is_list(body) ->
+        activities = Enum.map(body, &parse_activity/1)
 
-    case length(activities) do
-      @per_page -> fetch_page(req, page + 1, accumulated ++ activities)
-      _ -> accumulated ++ activities
+        case length(activities) do
+          @per_page -> fetch_page(req, page + 1, accumulated ++ activities)
+          _ -> accumulated ++ activities
+        end
+
+      %{"message" => message, "errors" => errors} ->
+        raise "Strava API error: #{message} — #{inspect(errors)}"
+
+      other ->
+        raise "Unexpected Strava response: #{inspect(other)}"
     end
   end
 
