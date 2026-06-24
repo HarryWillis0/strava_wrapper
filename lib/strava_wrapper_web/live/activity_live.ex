@@ -9,7 +9,7 @@ defmodule StravaWrapperWeb.ActivityLive do
   def mount(_params, session, socket) do
     case session do
       %{"athlete_id" => athlete_id} ->
-        activities = ActivityStore.all(athlete_id)
+        activities = ActivityStore.query(athlete_id, %{})
         gear_counts = Enum.frequencies_by(activities, & &1.gear_id)
 
         gear_options =
@@ -91,11 +91,7 @@ defmodule StravaWrapperWeb.ActivityLive do
   defp stream_page(socket) do
     %{athlete_id: athlete_id, filter: filter, page: page} = socket.assigns
 
-    activities =
-      case filter do
-        %{} = f when map_size(f) == 0 -> ActivityStore.all(athlete_id)
-        f -> ActivityStore.filter(athlete_id, f)
-      end
+    activities = ActivityStore.query(athlete_id, filter)
 
     total_pages = max(1, ceil(length(activities) / @page_size))
     page_activities = activities |> Enum.drop((page - 1) * @page_size) |> Enum.take(@page_size)
