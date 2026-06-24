@@ -3,6 +3,8 @@ defmodule StravaWrapperWeb.ActivityLive do
 
   alias StravaWrapper.ActivityStore
 
+  @page_size 20
+
   @impl true
   def mount(_params, session, socket) do
     case session do
@@ -15,10 +17,19 @@ defmodule StravaWrapperWeb.ActivityLive do
           |> Enum.reject(fn {id, _} -> is_nil(id) end)
           |> Enum.uniq_by(fn {id, _} -> id end)
 
+        total_pages = max(1, ceil(length(activities) / @page_size))
+
         socket =
           socket
-          |> assign(athlete_id: athlete_id, gear_options: gear_options, active_filter: "all")
-          |> stream(:activities, activities)
+          |> assign(
+            athlete_id: athlete_id,
+            gear_options: gear_options,
+            active_filter: "all",
+            filter: %{},
+            page: 1,
+            total_pages: total_pages
+          )
+          |> stream(:activities, Enum.take(activities, @page_size))
 
         {:ok, socket}
 
@@ -29,21 +40,65 @@ defmodule StravaWrapperWeb.ActivityLive do
 
   @impl true
   def handle_event("filter_gear", %{"gear_id" => "all"}, socket) do
-    activities = ActivityStore.all(socket.assigns.athlete_id)
-    socket = stream(socket, :activities, activities, reset: true)
-    {:noreply, assign(socket, active_filter: "all")}
+    socket =
+      socket
+      |> assign(active_filter: "all", filter: %{}, page: 1)
+      |> stream_page()
+
+    {:noreply, socket}
   end
 
   def handle_event("filter_gear", %{"gear_id" => "none"}, socket) do
-    activities = ActivityStore.filter(socket.assigns.athlete_id, %{gear_id: nil})
-    socket = stream(socket, :activities, activities, reset: true)
-    {:noreply, assign(socket, active_filter: "none")}
+    socket =
+      socket
+      |> assign(active_filter: "none", filter: %{gear_id: nil}, page: 1)
+      |> stream_page()
+
+    {:noreply, socket}
   end
 
   def handle_event("filter_gear", %{"gear_id" => gear_id}, socket) do
-    activities = ActivityStore.filter(socket.assigns.athlete_id, %{gear_id: gear_id})
-    socket = stream(socket, :activities, activities, reset: true)
-    {:noreply, assign(socket, active_filter: gear_id)}
+    socket =
+      socket
+      |> assign(active_filter: gear_id, filter: %{gear_id: gear_id}, page: 1)
+      |> stream_page()
+
+    {:noreply, socket}
+  end
+
+  def handle_event("prev_page", _, socket) do
+    socket =
+      socket
+      |> assign(page: max(1, socket.assigns.page - 1))
+      |> stream_page()
+
+    {:noreply, socket}
+  end
+
+  def handle_event("next_page", _, socket) do
+    socket =
+      socket
+      |> assign(page: min(socket.assigns.total_pages, socket.assigns.page + 1))
+      |> stream_page()
+
+    {:noreply, socket}
+  end
+
+  defp stream_page(socket) do
+    %{athlete_id: athlete_id, filter: filter, page: page} = socket.assigns
+
+    activities =
+      case filter do
+        %{} = f when map_size(f) == 0 -> ActivityStore.all(athlete_id)
+        f -> ActivityStore.filter(athlete_id, f)
+      end
+
+    total_pages = max(1, ceil(length(activities) / @page_size))
+    page_activities = activities |> Enum.drop((page - 1) * @page_size) |> Enum.take(@page_size)
+
+    socket
+    |> assign(total_pages: total_pages)
+    |> stream(:activities, page_activities, reset: true)
   end
 
   @impl true
@@ -111,6 +166,23 @@ defmodule StravaWrapperWeb.ActivityLive do
               </tr>
             </tbody>
           </table>
+          <div class="flex items-center justify-between mt-4">
+            <button
+              phx-click="prev_page"
+              disabled={@page == 1}
+              class="px-3 py-1 rounded text-sm border disabled:opacity-40"
+            >
+              &larr; Prev
+            </button>
+            <span class="text-sm text-base-content/60">Page {@page} of {@total_pages}</span>
+            <button
+              phx-click="next_page"
+              disabled={@page == @total_pages}
+              class="px-3 py-1 rounded text-sm border disabled:opacity-40"
+            >
+              Next &rarr;
+            </button>
+          </div>
         </div>
       </div>
     </Layouts.app>
