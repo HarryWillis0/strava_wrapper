@@ -1,7 +1,7 @@
 defmodule StravaWrapperWeb.ActivityLive do
   use StravaWrapperWeb, :live_view
 
-  alias StravaWrapper.ActivityStore
+  alias StravaWrapper.{ActivityStore, FilterEngine}
 
   @page_size 20
 
@@ -27,7 +27,8 @@ defmodule StravaWrapperWeb.ActivityLive do
             active_filter: "all",
             filter: %{},
             page: 1,
-            total_pages: total_pages
+            total_pages: total_pages,
+            stats: FilterEngine.stats(activities)
           )
           |> stream(:activities, Enum.take(activities, @page_size))
 
@@ -97,7 +98,7 @@ defmodule StravaWrapperWeb.ActivityLive do
     page_activities = activities |> Enum.drop((page - 1) * @page_size) |> Enum.take(@page_size)
 
     socket
-    |> assign(total_pages: total_pages)
+    |> assign(total_pages: total_pages, stats: FilterEngine.stats(activities))
     |> stream(:activities, page_activities, reset: true)
   end
 
@@ -106,6 +107,48 @@ defmodule StravaWrapperWeb.ActivityLive do
     ~H"""
     <Layouts.app flash={@flash}>
       <h1 class="text-2xl font-bold mb-6">Activities</h1>
+      <details open class="mb-6 border rounded-lg">
+        <summary class="px-4 py-3 cursor-pointer font-medium select-none">
+          {stats_label(@active_filter, @gear_options)}
+        </summary>
+        <div class="px-4 pb-4 pt-2 grid grid-cols-2 gap-3 sm:grid-cols-4 text-sm">
+          <div>
+            <div class="text-base-content/50 text-xs uppercase tracking-wide">Activities</div>
+            <div class="font-semibold">{@stats.total_count}</div>
+          </div>
+          <div>
+            <div class="text-base-content/50 text-xs uppercase tracking-wide">Distance</div>
+            <div class="font-semibold">{format_distance(@stats.total_distance)}</div>
+          </div>
+          <div>
+            <div class="text-base-content/50 text-xs uppercase tracking-wide">Time</div>
+            <div class="font-semibold">{format_duration(@stats.total_duration)}</div>
+          </div>
+          <div>
+            <div class="text-base-content/50 text-xs uppercase tracking-wide">
+              <%= if @active_filter not in ["all", "none"] do %>
+                Started using
+              <% else %>
+                First activity
+              <% end %>
+            </div>
+            <div class="font-semibold">{format_date(@stats.first_date)}</div>
+          </div>
+        </div>
+        <%= if map_size(@stats.type_breakdown) > 0 do %>
+          <div class="px-4 pb-4 flex flex-wrap gap-2">
+            <span
+              :for={{type, count} <- @stats.type_breakdown}
+              class="px-2 py-0.5 rounded-full bg-base-200 text-xs font-medium"
+            >
+              {count} {type}
+              <%= if count != 1 do %>
+                s
+              <% end %>
+            </span>
+          </div>
+        <% end %>
+      </details>
       <div class="flex gap-6">
         <aside class="w-48 shrink-0">
           <h2 class="font-semibold mb-3 text-sm uppercase tracking-wide">Filter by Gear</h2>
@@ -187,6 +230,14 @@ defmodule StravaWrapperWeb.ActivityLive do
       </div>
     </Layouts.app>
     """
+  end
+
+  defp stats_label("all", _gear_options), do: "Stats for all activities"
+  defp stats_label("none", _gear_options), do: "Stats for untagged activities"
+
+  defp stats_label(gear_id, gear_options) do
+    name = Enum.find_value(gear_options, gear_id, fn {id, name} -> id == gear_id && name end)
+    "Stats for #{name}"
   end
 
   defp format_date(nil), do: "—"
