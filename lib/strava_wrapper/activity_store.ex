@@ -22,23 +22,19 @@ defmodule StravaWrapper.ActivityStore do
     store_for_user(athlete_id, activities)
   end
 
-  @spec all(String.t()) :: list()
-  def all(user_id) do
-    case :ets.whereis(:activities) do
-      :undefined ->
-        []
+  @spec query(String.t(), map()) :: list()
+  def query(user_id, filter_map) do
+    activities =
+      case :ets.whereis(:activities) do
+        :undefined ->
+          []
 
-      _ ->
-        :ets.match_object(:activities, {{user_id, :_}, :_})
-        |> Enum.map(fn {_key, activity} -> activity end)
-    end
-  end
+        _ ->
+          :ets.match_object(:activities, {{user_id, :_}, :_})
+          |> Enum.map(fn {_key, activity} -> activity end)
+      end
 
-  @spec filter(String.t(), map()) :: list()
-  def filter(user_id, filter_map) do
-    user_id
-    |> all()
-    |> FilterEngine.apply(filter_map)
+    FilterEngine.apply(activities, filter_map)
   end
 
   @impl true
