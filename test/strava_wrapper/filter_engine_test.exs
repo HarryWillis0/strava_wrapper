@@ -49,6 +49,47 @@ defmodule StravaWrapper.FilterEngineTest do
     end
   end
 
+  describe "stats/1" do
+    test "returns zeroed map for empty list" do
+      assert FilterEngine.stats([]) == %{
+               total_count: 0,
+               total_distance: 0.0,
+               total_duration: 0,
+               first_date: nil,
+               type_breakdown: %{}
+             }
+    end
+
+    test "counts activities and breaks down by type" do
+      run1 = make_activity(id: 1, type: "Run", distance: 5000.0, duration: 1800)
+      run2 = make_activity(id: 2, type: "Run", distance: 3000.0, duration: 1200)
+      ride = make_activity(id: 3, type: "Ride", distance: 20_000.0, duration: 3600)
+
+      stats = FilterEngine.stats([run1, run2, ride])
+
+      assert stats.total_count == 3
+      assert stats.total_distance == 28_000.0
+      assert stats.total_duration == 6600
+      assert stats.type_breakdown == %{"Run" => 2, "Ride" => 1}
+    end
+
+    test "picks the earliest date as first_date" do
+      older = ~U[2024-01-01 00:00:00Z]
+      newer = ~U[2024-06-01 00:00:00Z]
+      a1 = make_activity(id: 1, date: newer)
+      a2 = make_activity(id: 2, date: older)
+
+      assert FilterEngine.stats([a1, a2]).first_date == older
+    end
+
+    test "treats nil distance and duration as 0" do
+      a = make_activity(id: 1, distance: nil, duration: nil)
+      stats = FilterEngine.stats([a])
+      assert stats.total_distance == 0.0
+      assert stats.total_duration == 0
+    end
+  end
+
   describe "apply/2 with multiple filters" do
     test "composes multiple criteria — result is the intersection" do
       match = make_activity(id: 1, gear_id: "b1", type: "Run")
