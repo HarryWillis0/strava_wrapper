@@ -5,7 +5,7 @@ A Phoenix LiveView app that fetches your Strava activity history and lets you fi
 ## Setup
 
 ```bash
-cp .env.example .env   # set STRAVA_ACCESS_TOKEN
+cp .env.example .env   # set STRAVA_CLIENT_ID and STRAVA_CLIENT_SECRET
 mix setup
 source .env && mix phx.server
 ```
