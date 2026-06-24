@@ -10,12 +10,13 @@ defmodule StravaWrapperWeb.ActivityLive do
     case session do
       %{"athlete_id" => athlete_id} ->
         activities = ActivityStore.all(athlete_id)
+        gear_counts = Enum.frequencies_by(activities, & &1.gear_id)
 
         gear_options =
           activities
-          |> Enum.map(fn a -> {a.gear_id, a.gear_name} end)
-          |> Enum.reject(fn {id, _} -> is_nil(id) end)
-          |> Enum.uniq_by(fn {id, _} -> id end)
+          |> Enum.reject(&is_nil(&1.gear_id))
+          |> Enum.uniq_by(& &1.gear_id)
+          |> Enum.map(fn a -> {a.gear_id, a.gear_name, Map.get(gear_counts, a.gear_id, 0)} end)
 
         total_pages = max(1, ceil(length(activities) / @page_size))
 
@@ -24,6 +25,8 @@ defmodule StravaWrapperWeb.ActivityLive do
           |> assign(
             athlete_id: athlete_id,
             gear_options: gear_options,
+            total_activities_count: length(activities),
+            no_gear_count: Map.get(gear_counts, nil, 0),
             active_filter: "all",
             filter: %{},
             page: 1,
@@ -107,82 +110,92 @@ defmodule StravaWrapperWeb.ActivityLive do
     ~H"""
     <Layouts.app flash={@flash}>
       <h1 class="text-2xl font-bold mb-6">Activities</h1>
-      <details open class="mb-6 border rounded-lg">
-        <summary class="px-4 py-3 cursor-pointer font-medium select-none">
+      <details open class="mb-6 border border-base-300 rounded-xl group">
+        <summary class="px-4 py-3 cursor-pointer font-medium select-none flex items-center justify-between">
           {stats_label(@active_filter, @gear_options)}
+          <.icon name="hero-chevron-down" class="w-4 h-4 transition-transform group-open:rotate-180" />
         </summary>
-        <div class="px-4 pb-4 pt-2 grid grid-cols-2 gap-3 sm:grid-cols-4 text-sm">
-          <div>
-            <div class="text-base-content/50 text-xs uppercase tracking-wide">Activities</div>
-            <div class="font-semibold">{@stats.total_count}</div>
+        <div class="px-4 pb-4 pt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div class="bg-base-200 rounded-lg p-3">
+            <div class="text-base-content/50 text-xs uppercase tracking-wide mb-1">Activities</div>
+            <div class="text-xl font-bold">{format_count(@stats.total_count)}</div>
           </div>
-          <div>
-            <div class="text-base-content/50 text-xs uppercase tracking-wide">Distance</div>
-            <div class="font-semibold">{format_distance(@stats.total_distance)}</div>
+          <div class="bg-base-200 rounded-lg p-3">
+            <div class="text-base-content/50 text-xs uppercase tracking-wide mb-1">Distance</div>
+            <div class="text-xl font-bold">{format_distance(@stats.total_distance)}</div>
           </div>
-          <div>
-            <div class="text-base-content/50 text-xs uppercase tracking-wide">Time</div>
-            <div class="font-semibold">{format_duration(@stats.total_duration)}</div>
+          <div class="bg-base-200 rounded-lg p-3">
+            <div class="text-base-content/50 text-xs uppercase tracking-wide mb-1">Time</div>
+            <div class="text-xl font-bold">{format_total_duration(@stats.total_duration)}</div>
           </div>
-          <div>
-            <div class="text-base-content/50 text-xs uppercase tracking-wide">
+          <div class="bg-base-200 rounded-lg p-3">
+            <div class="text-base-content/50 text-xs uppercase tracking-wide mb-1">
               <%= if @active_filter not in ["all", "none"] do %>
                 Started using
               <% else %>
                 First activity
               <% end %>
             </div>
-            <div class="font-semibold">{format_date(@stats.first_date)}</div>
+            <div class="text-xl font-bold">{format_date(@stats.first_date)}</div>
           </div>
         </div>
         <%= if map_size(@stats.type_breakdown) > 0 do %>
-          <div class="px-4 pb-4 flex flex-wrap gap-2">
+          <div class="px-4 pb-4 pt-3 border-t border-base-300 flex flex-wrap gap-2">
             <span
               :for={{type, count} <- @stats.type_breakdown}
-              class="px-2 py-0.5 rounded-full bg-base-200 text-xs font-medium"
+              class="px-3 py-1 rounded-full bg-base-200 text-sm font-medium"
             >
-              {count} {type}
-              <%= if count != 1 do %>
-                s
-              <% end %>
+              {pluralize(count, type)}
             </span>
           </div>
         <% end %>
       </details>
       <div class="flex gap-6">
-        <aside class="w-48 shrink-0">
-          <h2 class="font-semibold mb-3 text-sm uppercase tracking-wide">Filter by Gear</h2>
-          <div class="flex flex-col gap-1">
+        <aside class="w-56 shrink-0">
+          <h2 class="font-semibold mb-3 text-sm uppercase tracking-wide text-base-content/50">
+            Filter by Gear
+          </h2>
+          <div class="flex flex-col gap-0.5">
             <button
               phx-click="filter_gear"
               phx-value-gear_id="all"
               class={[
-                "text-left px-3 py-2 rounded text-sm",
-                @active_filter == "all" && "bg-primary text-primary-content font-medium"
+                "text-left px-3 py-2 rounded-lg text-sm flex items-center justify-between",
+                @active_filter == "all" && "bg-primary text-primary-content font-medium",
+                @active_filter != "all" && "hover:bg-base-200"
               ]}
             >
-              All activities
+              <span>All activities</span>
+              <span class="text-xs tabular-nums opacity-60">{@total_activities_count}</span>
             </button>
             <button
               phx-click="filter_gear"
               phx-value-gear_id="none"
               class={[
-                "text-left px-3 py-2 rounded text-sm",
-                @active_filter == "none" && "bg-primary text-primary-content font-medium"
+                "text-left px-3 py-2 rounded-lg text-sm flex items-center justify-between",
+                @active_filter == "none" && "bg-primary text-primary-content font-medium",
+                @active_filter != "none" && "hover:bg-base-200"
               ]}
             >
-              No gear
+              <span>No gear</span>
+              <span class="text-xs tabular-nums opacity-60">{@no_gear_count}</span>
             </button>
+            <%= if @gear_options != [] do %>
+              <div class="border-t border-base-300 my-2"></div>
+              <p class="px-3 mb-1 text-xs uppercase tracking-wide text-base-content/40">Gear</p>
+            <% end %>
             <button
-              :for={{gear_id, gear_name} <- @gear_options}
+              :for={{gear_id, gear_name, count} <- @gear_options}
               phx-click="filter_gear"
               phx-value-gear_id={gear_id}
               class={[
-                "text-left px-3 py-2 rounded text-sm",
-                @active_filter == gear_id && "bg-primary text-primary-content font-medium"
+                "text-left px-3 py-2 rounded-lg text-sm flex items-center justify-between",
+                @active_filter == gear_id && "bg-primary text-primary-content font-medium",
+                @active_filter != gear_id && "hover:bg-base-200"
               ]}
             >
-              {gear_name || gear_id}
+              <span class="truncate">{gear_name || gear_id}</span>
+              <span class="text-xs tabular-nums opacity-60 ml-2 shrink-0">{count}</span>
             </button>
           </div>
         </aside>
@@ -236,12 +249,24 @@ defmodule StravaWrapperWeb.ActivityLive do
   defp stats_label("none", _gear_options), do: "Stats for untagged activities"
 
   defp stats_label(gear_id, gear_options) do
-    name = Enum.find_value(gear_options, gear_id, fn {id, name} -> id == gear_id && name end)
+    name = Enum.find_value(gear_options, gear_id, fn {id, name, _} -> id == gear_id && name end)
     "Stats for #{name}"
   end
 
+  defp pluralize(count, word), do: "#{count} #{word}#{if count != 1, do: "s"}"
+
+  defp format_count(n) when n >= 1_000 do
+    "#{div(n, 1_000)},#{String.pad_leading("#{rem(n, 1_000)}", 3, "0")}"
+  end
+
+  defp format_count(n), do: "#{n}"
+
   defp format_date(nil), do: "—"
-  defp format_date(%DateTime{} = dt), do: Calendar.strftime(dt, "%Y-%m-%d")
+
+  defp format_date(%DateTime{} = dt) do
+    "#{Calendar.strftime(dt, "%b")} #{dt.day}, #{dt.year}"
+  end
+
   defp format_date(other), do: to_string(other)
 
   defp format_distance(nil), do: "—"
@@ -250,8 +275,27 @@ defmodule StravaWrapperWeb.ActivityLive do
   defp format_duration(nil), do: "—"
 
   defp format_duration(seconds) do
-    minutes = div(seconds, 60)
+    hours = div(seconds, 3_600)
+    minutes = div(rem(seconds, 3_600), 60)
     secs = rem(seconds, 60)
-    "#{minutes}:#{String.pad_leading("#{secs}", 2, "0")}"
+
+    if hours > 0 do
+      "#{hours}:#{String.pad_leading("#{minutes}", 2, "0")}:#{String.pad_leading("#{secs}", 2, "0")}"
+    else
+      "#{minutes}:#{String.pad_leading("#{secs}", 2, "0")}"
+    end
+  end
+
+  defp format_total_duration(nil), do: "—"
+
+  defp format_total_duration(seconds) do
+    hours = div(seconds, 3_600)
+    minutes = div(rem(seconds, 3_600), 60)
+
+    cond do
+      hours > 0 -> "#{hours}h #{minutes}m"
+      minutes > 0 -> "#{minutes}m"
+      true -> "#{seconds}s"
+    end
   end
 end
