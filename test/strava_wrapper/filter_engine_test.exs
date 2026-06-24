@@ -99,4 +99,93 @@ defmodule StravaWrapper.FilterEngineTest do
       assert FilterEngine.apply(activities, %{gear_id: "b1", type: "Run"}) == [match]
     end
   end
+
+  describe "apply/2 sorting" do
+    test "no-op when sort keys are absent" do
+      a1 = make_activity(id: 1, name: "Bravo")
+      a2 = make_activity(id: 2, name: "Alpha")
+      assert FilterEngine.apply([a1, a2], %{}) == [a1, a2]
+    end
+
+    test "sorts by name ascending" do
+      a1 = make_activity(id: 1, name: "Bravo")
+      a2 = make_activity(id: 2, name: "Alpha")
+      result = FilterEngine.apply([a1, a2], %{sort_by: :name, sort_dir: :asc})
+      assert Enum.map(result, & &1.name) == ["Alpha", "Bravo"]
+    end
+
+    test "sorts by name descending" do
+      a1 = make_activity(id: 1, name: "Alpha")
+      a2 = make_activity(id: 2, name: "Bravo")
+      result = FilterEngine.apply([a1, a2], %{sort_by: :name, sort_dir: :desc})
+      assert Enum.map(result, & &1.name) == ["Bravo", "Alpha"]
+    end
+
+    test "sorts by date ascending" do
+      older = ~U[2024-01-01 00:00:00Z]
+      newer = ~U[2024-06-01 00:00:00Z]
+      a1 = make_activity(id: 1, date: newer)
+      a2 = make_activity(id: 2, date: older)
+      result = FilterEngine.apply([a1, a2], %{sort_by: :date, sort_dir: :asc})
+      assert Enum.map(result, & &1.date) == [older, newer]
+    end
+
+    test "sorts by date descending" do
+      older = ~U[2024-01-01 00:00:00Z]
+      newer = ~U[2024-06-01 00:00:00Z]
+      a1 = make_activity(id: 1, date: older)
+      a2 = make_activity(id: 2, date: newer)
+      result = FilterEngine.apply([a1, a2], %{sort_by: :date, sort_dir: :desc})
+      assert Enum.map(result, & &1.date) == [newer, older]
+    end
+
+    test "sorts by type ascending" do
+      a1 = make_activity(id: 1, type: "Run")
+      a2 = make_activity(id: 2, type: "Ride")
+      result = FilterEngine.apply([a1, a2], %{sort_by: :type, sort_dir: :asc})
+      assert Enum.map(result, & &1.type) == ["Ride", "Run"]
+    end
+
+    test "sorts by distance ascending" do
+      a1 = make_activity(id: 1, distance: 10_000.0)
+      a2 = make_activity(id: 2, distance: 5_000.0)
+      result = FilterEngine.apply([a1, a2], %{sort_by: :distance, sort_dir: :asc})
+      assert Enum.map(result, & &1.distance) == [5_000.0, 10_000.0]
+    end
+
+    test "sorts by distance descending" do
+      a1 = make_activity(id: 1, distance: 5_000.0)
+      a2 = make_activity(id: 2, distance: 10_000.0)
+      result = FilterEngine.apply([a1, a2], %{sort_by: :distance, sort_dir: :desc})
+      assert Enum.map(result, & &1.distance) == [10_000.0, 5_000.0]
+    end
+
+    test "sorts by duration ascending" do
+      a1 = make_activity(id: 1, duration: 3600)
+      a2 = make_activity(id: 2, duration: 1800)
+      result = FilterEngine.apply([a1, a2], %{sort_by: :duration, sort_dir: :asc})
+      assert Enum.map(result, & &1.duration) == [1800, 3600]
+    end
+
+    test "sorts by gear_name ascending" do
+      a1 = make_activity(id: 1, gear_name: "Zoom Fly")
+      a2 = make_activity(id: 2, gear_name: "Air Max")
+      result = FilterEngine.apply([a1, a2], %{sort_by: :gear_name, sort_dir: :asc})
+      assert Enum.map(result, & &1.gear_name) == ["Air Max", "Zoom Fly"]
+    end
+
+    test "nil values sort to the bottom regardless of direction (asc)" do
+      a_nil = make_activity(id: 1, distance: nil)
+      a_val = make_activity(id: 2, distance: 5_000.0)
+      result = FilterEngine.apply([a_nil, a_val], %{sort_by: :distance, sort_dir: :asc})
+      assert List.last(result).id == 1
+    end
+
+    test "nil values sort to the bottom regardless of direction (desc)" do
+      a_nil = make_activity(id: 1, distance: nil)
+      a_val = make_activity(id: 2, distance: 5_000.0)
+      result = FilterEngine.apply([a_nil, a_val], %{sort_by: :distance, sort_dir: :desc})
+      assert List.last(result).id == 1
+    end
+  end
 end
