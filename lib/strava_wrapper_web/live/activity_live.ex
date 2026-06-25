@@ -9,6 +9,12 @@ defmodule StravaWrapperWeb.ActivityLive do
   def mount(_params, session, socket) do
     case session do
       %{"athlete_id" => athlete_id} ->
+        token = session["access_token"]
+
+        if connected?(socket) && token && ActivityStore.query(athlete_id, %{}) == [] do
+          send(self(), {:load_activities, token})
+        end
+
         all_activities = ActivityStore.query(athlete_id, %{})
         gear_counts = Enum.frequencies_by(all_activities, & &1.gear_id)
 
@@ -41,6 +47,39 @@ defmodule StravaWrapperWeb.ActivityLive do
       _ ->
         {:ok, push_navigate(socket, to: ~p"/auth/strava")}
     end
+  end
+
+  @impl true
+  def handle_info({:load_activities, token}, socket) do
+    athlete_id = socket.assigns.athlete_id
+    ActivityStore.load_for_user(athlete_id, token)
+
+    activities = ActivityStore.query(athlete_id, %{})
+    gear_counts = Enum.frequencies_by(activities, & &1.gear_id)
+
+    gear_options =
+      activities
+      |> Enum.reject(&is_nil(&1.gear_id))
+      |> Enum.uniq_by(& &1.gear_id)
+      |> Enum.map(fn a -> {a.gear_id, a.gear_name, Map.get(gear_counts, a.gear_id, 0)} end)
+
+    total_pages = max(1, ceil(length(activities) / @page_size))
+
+    socket =
+      socket
+      |> assign(
+        gear_options: gear_options,
+        total_activities_count: length(activities),
+        no_gear_count: Map.get(gear_counts, nil, 0),
+        active_filter: "all",
+        filter: %{},
+        page: 1,
+        total_pages: total_pages,
+        stats: FilterEngine.stats(activities)
+      )
+      |> stream(:activities, Enum.take(activities, @page_size), reset: true)
+
+    {:noreply, socket}
   end
 
   @impl true
