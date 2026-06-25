@@ -9,31 +9,32 @@ defmodule StravaWrapperWeb.ActivityLive do
   def mount(_params, session, socket) do
     case session do
       %{"athlete_id" => athlete_id} ->
-        activities = ActivityStore.query(athlete_id, %{})
-        gear_counts = Enum.frequencies_by(activities, & &1.gear_id)
+        all_activities = ActivityStore.query(athlete_id, %{})
+        gear_counts = Enum.frequencies_by(all_activities, & &1.gear_id)
 
         gear_options =
-          activities
+          all_activities
           |> Enum.reject(&is_nil(&1.gear_id))
           |> Enum.uniq_by(& &1.gear_id)
           |> Enum.map(fn a -> {a.gear_id, a.gear_name, Map.get(gear_counts, a.gear_id, 0)} end)
-
-        total_pages = max(1, ceil(length(activities) / @page_size))
 
         socket =
           socket
           |> assign(
             athlete_id: athlete_id,
             gear_options: gear_options,
-            total_activities_count: length(activities),
+            total_activities_count: length(all_activities),
             no_gear_count: Map.get(gear_counts, nil, 0),
             active_filter: "all",
             filter: %{},
+            sort_by: :date,
+            sort_dir: :desc,
             page: 1,
-            total_pages: total_pages,
-            stats: FilterEngine.stats(activities)
+            total_pages: 1,
+            stats: %{}
           )
-          |> stream(:activities, Enum.take(activities, @page_size))
+          |> stream(:activities, [])
+          |> stream_page()
 
         {:ok, socket}
 
@@ -70,6 +71,26 @@ defmodule StravaWrapperWeb.ActivityLive do
     {:noreply, socket}
   end
 
+  def handle_event("sort", %{"field" => field}, socket) do
+    field_atom = String.to_existing_atom(field)
+    current_sort = socket.assigns.sort_by
+
+    {sort_by, sort_dir} =
+      if field_atom == current_sort do
+        toggled = if socket.assigns.sort_dir == :asc, do: :desc, else: :asc
+        {field_atom, toggled}
+      else
+        {field_atom, :asc}
+      end
+
+    socket =
+      socket
+      |> assign(sort_by: sort_by, sort_dir: sort_dir, page: 1)
+      |> stream_page()
+
+    {:noreply, socket}
+  end
+
   def handle_event("prev_page", _, socket) do
     socket =
       socket
@@ -89,9 +110,11 @@ defmodule StravaWrapperWeb.ActivityLive do
   end
 
   defp stream_page(socket) do
-    %{athlete_id: athlete_id, filter: filter, page: page} = socket.assigns
+    %{athlete_id: athlete_id, filter: filter, sort_by: sort_by, sort_dir: sort_dir, page: page} =
+      socket.assigns
 
-    activities = ActivityStore.query(athlete_id, filter)
+    query = Map.merge(filter, %{sort_by: sort_by, sort_dir: sort_dir})
+    activities = ActivityStore.query(athlete_id, query)
 
     total_pages = max(1, ceil(length(activities) / @page_size))
     page_activities = activities |> Enum.drop((page - 1) * @page_size) |> Enum.take(@page_size)
@@ -199,12 +222,31 @@ defmodule StravaWrapperWeb.ActivityLive do
           <table class="table w-full">
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Date</th>
-                <th>Type</th>
-                <th>Distance</th>
-                <th>Duration</th>
-                <th>Gear</th>
+                <th :for={
+                  {label, field} <- [
+                    {"Name", "name"},
+                    {"Date", "date"},
+                    {"Type", "type"},
+                    {"Distance", "distance"},
+                    {"Duration", "duration"},
+                    {"Gear", "gear_name"}
+                  ]
+                }>
+                  <button
+                    phx-click="sort"
+                    phx-value-field={field}
+                    class="flex items-center gap-1 font-semibold hover:text-primary"
+                  >
+                    {label}
+                    <%= if @sort_by == String.to_existing_atom(field) do %>
+                      <%= if @sort_dir == :asc do %>
+                        ↑
+                      <% else %>
+                        ↓
+                      <% end %>
+                    <% end %>
+                  </button>
+                </th>
               </tr>
             </thead>
             <tbody id="activities" phx-update="stream">
