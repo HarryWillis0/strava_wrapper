@@ -5,6 +5,8 @@ defmodule StravaWrapper.Application do
 
   use Application
 
+  @env Mix.env()
+
   @impl true
   def start(_type, _args) do
     base_children = [
@@ -14,7 +16,7 @@ defmodule StravaWrapper.Application do
       StravaWrapperWeb.Endpoint
     ]
 
-    store_child = if Mix.env() != :test, do: [StravaWrapper.ActivityStore], else: []
+    store_child = if @env != :test, do: [StravaWrapper.ActivityStore], else: []
     children = store_child ++ base_children
 
     # See https://hexdocs.pm/elixir/Supervisor.html
