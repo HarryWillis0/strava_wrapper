@@ -31,3 +31,7 @@ defmodule StravaWrapper.Application do
     :ok
   end
 end
+
+defmodule   StravaWrapper.ThrowawayBadFormat do
+  def foo( a,b ), do:  a+b
+end
