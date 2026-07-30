@@ -78,11 +78,21 @@ jobs:
 
       # PHX_HOST can't be known until Cloud Run assigns the service's *.run.app
       # hostname on first deploy, so it's set as a follow-up update rather than
-      # baked into the deploy above.
-      - name: Point PHX_HOST at the assigned Cloud Run URL
+      # baked into the deploy above. The vars.PHX_HOST repo variable overrides
+      # this once a custom domain is mapped, so switching domains is a
+      # variable change rather than a workflow edit.
+      - name: Determine PHX_HOST
+        id: phx_host
         run: |
-          host=$(echo "${{ steps.deploy.outputs.url }}" | sed -E 's#^https?://##')
+          if [ -n "${{ vars.PHX_HOST }}" ]; then
+            echo "host=${{ vars.PHX_HOST }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "host=$(echo "${{ steps.deploy.outputs.url }}" | sed -E 's#^https?://##')" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Update PHX_HOST on the service
+        run: |
           gcloud run services update ${{ env.SERVICE_NAME }} \
             --project=${{ vars.GCP_PROJECT_ID }} \
             --region=${{ vars.ARTIFACT_REGISTRY_REGION }} \
-            --update-env-vars=PHX_HOST="$host"
+            --update-env-vars=PHX_HOST="${{ steps.phx_host.outputs.host }}"
