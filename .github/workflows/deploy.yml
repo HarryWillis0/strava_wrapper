@@ -1,0 +1,88 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  MIX_ENV: test
+  SERVICE_NAME: strava-wrapper
+  IMAGE: ${{ vars.ARTIFACT_REGISTRY_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/strava-wrapper/strava-wrapper
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "28.5"
+          elixir-version: "1.19.5"
+
+      - name: Cache deps and build
+        uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-
+
+      - name: Install dependencies
+        run: mix deps.get
+
+      - name: Run tests
+        run: mix test
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.SERVICE_ACCOUNT_EMAIL }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ vars.ARTIFACT_REGISTRY_REGION }}-docker.pkg.dev --quiet
+
+      - name: Build image
+        run: docker build -t ${{ env.IMAGE }}:${{ github.sha }} .
+
+      - name: Push image
+        run: docker push ${{ env.IMAGE }}:${{ github.sha }}
+
+      - name: Deploy to Cloud Run
+        id: deploy
+        run: |
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --project=${{ vars.GCP_PROJECT_ID }} \
+            --region=${{ vars.ARTIFACT_REGISTRY_REGION }} \
+            --image=${{ env.IMAGE }}:${{ github.sha }} \
+            --max-instances=1 \
+            --allow-unauthenticated \
+            --set-secrets=SECRET_KEY_BASE=SECRET_KEY_BASE:latest,STRAVA_CLIENT_SECRET=STRAVA_CLIENT_SECRET:latest \
+            --set-env-vars=PHX_SERVER=true,STRAVA_CLIENT_ID=${{ vars.STRAVA_CLIENT_ID }} \
+            --format='value(status.url)' > url.txt
+          echo "url=$(cat url.txt)" >> "$GITHUB_OUTPUT"
+
+      # PHX_HOST can't be known until Cloud Run assigns the service's *.run.app
+      # hostname on first deploy, so it's set as a follow-up update rather than
+      # baked into the deploy above.
+      - name: Point PHX_HOST at the assigned Cloud Run URL
+        run: |
+          host=$(echo "${{ steps.deploy.outputs.url }}" | sed -E 's#^https?://##')
+          gcloud run services update ${{ env.SERVICE_NAME }} \
+            --project=${{ vars.GCP_PROJECT_ID }} \
+            --region=${{ vars.ARTIFACT_REGISTRY_REGION }} \
+            --update-env-vars=PHX_HOST="$host"
